@@ -27,54 +27,65 @@
 #include "sdkconfig.h"
 
 #if defined CONFIG_LOG_COLORS
-#undef CONFIG_LOG_COLORS // this is on by default and breaks logging
-#endif
+  #undef CONFIG_LOG_COLORS // this is on by default and breaks logging
+  #endif
 #include "esp_log.h"
 
-#if defined BOARD_HAS_PSRAM || defined CONFIG_SPIRAM_SUPPORT
-#warning "Will use PSRAM or heap"
-#elif !defined CONFIG_SPIRAM_SUPPORT
-#warning "No SPIRAM detected, will use heap"
-#endif
+// This warning was confusing and has been removed
+// #if defined BOARD_HAS_PSRAM || defined CONFIG_SPIRAM_SUPPORT
+//   #warning "Will use PSRAM or heap"
+// #elif !defined CONFIG_SPIRAM_SUPPORT
+//   #warning "No SPIRAM detected, will use heap"
+// #endif
 
 #include "esp_idf_version.h"
 
 // for SPIRAM detection support
 #if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)) // IDF 5+
+  // esp_spiram migrated to esp_psram
+  #include "esp_psram.h"
 
-#include "esp_psram.h"
+  // esp_spiram obsolete?
+  #if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)) // IDF 5.5+
+    // https://github.com/espressif/esp-idf/blob/master/docs/en/migration-guides/release-5.x/5.0/system.rst#psram
+    #undef BOARD_HAS_PSRAM
+  #endif
+
+  #if !defined CONFIG_SPIRAM && defined CONFIG_SPIRAM_SUPPORT
+    #define CONFIG_SPIRAM_SUPPORT CONFIG_SPIRAM
+  #endif
 
 #else
 
-#ifdef CONFIG_IDF_CMAKE     // IDF 4+
-#if CONFIG_IDF_TARGET_ESP32 // ESP32/PICO-D4
-#include "esp32/spiram.h"
-#elif CONFIG_IDF_TARGET_ESP32S2
-#include "esp32s2/spiram.h"
-#include "esp32s2/rom/cache.h"
-#elif CONFIG_IDF_TARGET_ESP32S3
-#include "esp32s3/spiram.h"
-#include "esp32s3/rom/cache.h"
-#else // CONFIG_IDF_TARGET_ESP32P4
-// psram mapping is seamless on P4, no need to load external spiram component
-#undef BOARD_HAS_PSRAM
-#endif
+  #ifdef CONFIG_IDF_CMAKE     // IDF 4+
+    #if CONFIG_IDF_TARGET_ESP32 // ESP32/PICO-D4
+      #include "esp32/spiram.h"
+    #elif CONFIG_IDF_TARGET_ESP32S2
+      #include "esp32s2/spiram.h"
+      #include "esp32s2/rom/cache.h"
+    #elif CONFIG_IDF_TARGET_ESP32S3
+      #include "esp32s3/spiram.h"
+      #include "esp32s3/rom/cache.h"
+    #else // CONFIG_IDF_TARGET_ESP32P4
+      // psram mapping is seamless on P4, no need to load external spiram component
+      #undef BOARD_HAS_PSRAM
+    #endif
 
-#else // ESP32 Before IDF 4.0
+  #else // ESP32 Before IDF 4.0
 
-#include "esp_spiram.h"
+    #include "esp_spiram.h"
 
-#endif // CONFIG_IDF_CMAKE
+  #endif // CONFIG_IDF_CMAKE
 
 #endif // IDF 5+
 
 // for later support
 #if __has_include("esp_arduino_version.h")
-#include "esp_arduino_version.h"
+  #include "esp_arduino_version.h"
 #endif
 
 #if __has_include("esp_idf_version.h")
-#include "esp_idf_version.h"
+  #include "esp_idf_version.h"
 #endif
 
 #include "pfs.h"
@@ -368,13 +379,13 @@ void pfs_set_alloc_functions() {
   pfs_realloc = i_realloc;
   pfs_calloc = i_calloc;
   pfs_free_mem = i_free;
-#if defined CONFIG_SPIRAM_SUPPORT
-  pfs_set_max_items(256);
-  pfs_set_block_size(4096);
-#else
-  pfs_set_max_items(16);
-  pfs_set_block_size(512);
-#endif
+  #if defined CONFIG_SPIRAM_SUPPORT
+    pfs_set_max_items(256);
+    pfs_set_block_size(4096);
+  #else
+    pfs_set_max_items(16);
+    pfs_set_block_size(512);
+  #endif
 #endif
 }
 
