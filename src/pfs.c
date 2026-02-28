@@ -275,7 +275,7 @@ int pfs_mkdirp(const char *from_filename) {
     ESP_LOGE(TAG, "Cowardly refusing to create root path");
     return 0;
   }
-  char *tmp_path = (char *)pfs_calloc(pathlen, sizeof(char));
+  char *tmp_path = (char *)pfs_calloc(pathlen + 1, sizeof(char));
   if (tmp_path == NULL) {
     ESP_LOGE(
         TAG,
@@ -283,7 +283,7 @@ int pfs_mkdirp(const char *from_filename) {
         pathlen, from_filename);
     return -1;
   }
-  snprintf(tmp_path, pathlen, "%s", from_filename);
+  snprintf(tmp_path, pathlen + 1, "%s", from_filename);
 
   for (size_t i = 0; i < pathlen; i++) {
     if (!isprint((int)from_filename[i]) != 0) {
@@ -712,7 +712,13 @@ pfs_file_t *pfs_fopen(const char *path, int flags, int fmode) {
       free(pfs_files[fileslot]->name);
     }
     int pathlen = strlen(path);
+
     pfs_files[fileslot]->name = (char *)pfs_malloc(pathlen + 1);
+    if (pfs_files[fileslot]->name == NULL) {
+      ESP_LOGE(TAG, "alloc fail!");
+      return NULL;
+    }
+  
     memcpy(pfs_files[fileslot]->name, path, pathlen + 1);
     pfs_files[fileslot]->index = 0; // default truncate
     pfs_files[fileslot]->size = 0;
@@ -749,7 +755,15 @@ pfs_file_t *pfs_fopen(const char *path, int flags, int fmode) {
 }
 
 size_t pfs_fread(uint8_t *buf, size_t size, size_t count, pfs_file_t *stream) {
-  size_t to_read = size * count;
+  size_t to_read;
+
+  // Integer overflow protection
+  if ((0 < size) && (count > SIZE_MAX / size)) {
+    ESP_LOGE(TAG, "Integer overflow: size * count would exceed SIZE_MAX");
+    return 0;
+  }
+
+  to_read = size * count;
 
   if ((stream->index + to_read) >= stream->size) {
     if (stream->index <= stream->size) {
@@ -760,7 +774,7 @@ size_t pfs_fread(uint8_t *buf, size_t size, size_t count, pfs_file_t *stream) {
       ESP_LOGE(TAG,
                "Attempted to read %d out of bounds bytes at index %d of %d",
                to_read, stream->index, stream->size);
-      return -1;
+      return 0;
     }
   }
   memcpy(buf, &stream->bytes[stream->index], to_read);
@@ -779,7 +793,15 @@ size_t pfs_fread(uint8_t *buf, size_t size, size_t count, pfs_file_t *stream) {
 
 size_t pfs_fwrite(const uint8_t *buf, size_t size, size_t count,
                   pfs_file_t *stream) {
-  size_t to_write = size * count;
+  size_t to_write;
+
+  // Integer overflow protection
+  if ((0 < size) && (count > SIZE_MAX / size)) {
+    ESP_LOGE(TAG, "Integer overflow: size * count would exceed SIZE_MAX");
+    return -1;
+  }
+
+  to_write = size * count;
 
   if (stream->index + to_write >= stream->memsize) {
 
@@ -1036,6 +1058,10 @@ int pfs_rename(const char *from, const char *to) {
     ESP_LOGD(TAG, "Renaming file #%d from '%s' to '%s'", file_id, from, to);
     free(pfs_files[file_id]->name);
     pfs_files[file_id]->name = (char *)pfs_malloc(strlen(to) + 1);
+    if (pfs_files[file_id]->name == NULL) {
+      ESP_LOGE(TAG, "alloc fail!");
+      return -1;
+    }
     memcpy(pfs_files[file_id]->name, to, strlen(to) + 1);
     return 0;
   }
@@ -1051,6 +1077,10 @@ int pfs_rename(const char *from, const char *to) {
     pfs_dir_t *dir = pfs_dirs[dir_id];
     free(dir->name);
     dir->name = (char *)pfs_malloc(strlen(to) + 1);
+    if (dir->name == NULL) {
+      ESP_LOGE(TAG, "alloc fail!");
+      return -1;
+    }
     memcpy(dir->name, to, strlen(to) + 1);
 
     for (int i = 0; i < dir->parent_dir->itemscount; i++) {
@@ -1304,18 +1334,30 @@ int vfs_pfs_fopen(const char *path, int flags, int mode) {
 ssize_t vfs_pfs_read(int fd, void *dst, size_t size) {
   if (pfs_files[fd] == NULL)
     return 0;
+  if ((0 > fd) || (fd >= pfs_max_items)) {
+    ESP_LOGE(TAG, "Invalid file descriptor: %d", fd);
+    return -1;
+  }
   return pfs_fread(dst, size, 1, pfs_files[fd]);
 }
 
 ssize_t vfs_pfs_write(int fd, const void *data, size_t size) {
   if (pfs_files[fd] == NULL)
     return 0;
+  if ((0 > fd) || (fd >= pfs_max_items)) {
+    ESP_LOGE(TAG, "Invalid file descriptor: %d", fd);
+    return -1;
+  }
   return pfs_fwrite(data, size, 1, pfs_files[fd]);
 }
 
 int vfs_pfs_close(int fd) {
   if (pfs_files[fd] == NULL)
     return -1;
+  if ((0 > fd) || (fd >= pfs_max_items)) {
+    ESP_LOGE(TAG, "Invalid file descriptor: %d", fd);
+    return -1;
+  }
   pfs_fclose(pfs_files[fd]);
   return 0;
 }
@@ -1329,6 +1371,10 @@ int vfs_pfs_fstat(int fd, struct stat *st) {
   assert(st);
   if (pfs_files[fd] == NULL) {
     ESP_LOGE(TAG, "Invalid file descriptor (%d)", fd);
+    return -1;
+  }
+  if ((0 > fd) || (fd >= pfs_max_items)) {
+    ESP_LOGE(TAG, "Invalid file descriptor: %d", fd);
     return -1;
   }
   struct stat s;
@@ -1349,9 +1395,12 @@ int vfs_pfs_stat(const char *path, struct stat *st) {
 }
 
 off_t vfs_pfs_lseek(int fd, off_t offset, int mode) {
-
   if (pfs_files[fd] == NULL)
     return -1;
+  if ((0 > fd) || (fd >= pfs_max_items)) {
+    ESP_LOGE(TAG, "Invalid file descriptor: %d", fd);
+    return -1;
+  }
   if (pfs_fseek(pfs_files[fd], offset, mode) == 0)
     return offset;
   return -1;
