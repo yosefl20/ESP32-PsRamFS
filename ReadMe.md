@@ -67,9 +67,7 @@ Tested on:
 
 - ESP32-Wroom
 - ESP32-Wrover
-- ESP32-S2
-- ESP32-S3
-- ESP32-C3
+- ESP32-S2/S3/C3/C6/P4
 
 
 
@@ -94,4 +92,6 @@ Credits/thanks:
 - [sharandac](https://github.com/sharandac)
 - [Rob58329](https://github.com/Rob58329)
 - [whiteaxxe](https://github.com/whiteaxxe)
+- [BlueAndi](https://github.com/BlueAndi)
+- [yosefl20](https://github.com/yosefl20)
 
