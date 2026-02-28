@@ -28,6 +28,7 @@
 #define _PSRAMFS_H_
 
 #include "FS.h"
+#include "esp_idf_version.h"
 
 #define FPSRAM_WIPE_FULL 1
 #define FPSRAM_PARTITION_LABEL "psram"

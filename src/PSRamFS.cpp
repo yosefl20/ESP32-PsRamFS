@@ -58,7 +58,10 @@ bool F_PSRam::begin(bool formatOnFail, const char * basePath, uint8_t maxOpenFil
   esp_vfs_pfs_conf_t conf = {
     .base_path = basePath,
     .partition_label = partitionLabel, // ignored ?
-    .format_if_mount_failed = false
+    .format_if_mount_failed = false,
+#if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)) // IDF 5+
+    .dont_mount = false,
+#endif
   };
 
   esp_err_t err = esp_vfs_pfs_register(&conf);
